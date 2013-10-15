@@ -20,6 +20,8 @@
 
     insert/3,
     lookup/2,
+    match/3,
+    match_object/3,
     remove/2,
     clear/1,
 
@@ -78,6 +80,23 @@ insert(LRU, Key, Val) ->
 remove(LRU, Key) ->
     gen_server:call(LRU, {remove, Key}).
 
+%% @doc match/3 provides an efficient way to retrieve parts of the
+%% keys and values without copying or requiring circumvention of the
+%% ets_lru API. The KeySpec and ValueSpec parameters are used as part
+%% of one larger match spec so keep in mind that all capturing
+%% placeholders will be aliased between the key and value parts.
+-spec match(atom() | pid(), term(), term()) -> [[any()]].
+match(LRU, KeySpec, ValueSpec) ->
+    gen_server:call(LRU, {match, KeySpec, ValueSpec}).
+
+%% @doc match_object/3 provides an efficient way to retrieve multiple
+%% values using match conditions. The KeySpec and ValueSpec parameters
+%% are used as part of one larger match spec so keep in mind that all
+%% capturing placeholders will be aliased between the key and value
+%% parts.
+-spec match_object(atom() | pid(), term(), term()) -> [any()].
+match_object(LRU, KeySpec, ValueSpec) ->
+    gen_server:call(LRU, {match_object, KeySpec, ValueSpec}).
 
 clear(LRU) ->
     gen_server:call(LRU, clear).
@@ -121,6 +140,20 @@ handle_call({lookup, Key}, _From, St) ->
             not_found
     end,
     {reply, Reply, St, 0};
+
+handle_call({match_object, KeySpec, ValueSpec}, _From, St) ->
+    Pattern = #entry{key=KeySpec, val=ValueSpec, _='_'},
+    Entries = ets:match_object(St#st.objects, Pattern),
+    Values = lists:map(fun(#entry{key=Key,val=Val}) ->
+        accessed(Key, St),
+        Val
+    end, Entries),
+    {reply, Values, St, 0};
+
+handle_call({match, KeySpec, ValueSpec}, _From, St) ->
+    Pattern = #entry{key=KeySpec, val=ValueSpec, _='_'},
+    Values = ets:match(St#st.objects, Pattern),
+    {reply, Values, St, 0};
 
 handle_call({insert, Key, Val}, _From, St) ->
     NewATime = erlang:now(),
