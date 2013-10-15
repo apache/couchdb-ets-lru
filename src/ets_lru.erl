@@ -114,8 +114,8 @@ terminate(_Reason, St) ->
 
 handle_call({lookup, Key}, _From, St) ->
     Reply = case ets:lookup(St#st.objects, Key) of
-        [#entry{val=Val}] ->
-            accessed(St, Key),
+        [#entry{val=Val} | _] ->
+            accessed(Key, St),
             {ok, Val};
         [] ->
             not_found
