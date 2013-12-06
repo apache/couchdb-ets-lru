@@ -5,7 +5,7 @@
 main([]) ->
     code:add_pathz("test"),
     code:add_pathz("ebin"),
-    tutil:run(6, fun() -> test() end).
+    tutil:run(7, fun() -> test() end).
 
 test() ->
     ?WITH_LRU(test_match_zero_values),
@@ -35,7 +35,10 @@ test_match_zero_objects(LRU) ->
 
 test_match_one_object(LRU) ->
     ets_lru:insert(LRU, ans, 42),
-    etap:is(ets_lru:match_object(LRU, ans, '$1'), [42], "Single match_object").
+    ViaRegistered = ets_lru:match_object(test_lru, ans, '$1'),
+    etap:is(ViaRegistered, [42], "Single match_object (registered)"),
+    ViaPid = ets_lru:match_object(LRU, ans, '$1'),
+    etap:is(ViaPid, [42], "Single match_object (pid)").
 
 test_match_many_objects(LRU) ->
     ets_lru:insert(LRU, {color, blue}, a),

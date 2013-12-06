@@ -96,6 +96,13 @@ match(LRU, KeySpec, ValueSpec) ->
 %% capturing placeholders will be aliased between the key and value
 %% parts.
 -spec match_object(atom() | pid(), term(), term()) -> [any()].
+match_object(Name, KeySpec, ValueSpec) when is_atom(Name) ->
+    Pattern = #entry{key=KeySpec, val=ValueSpec, _='_'},
+    Entries = ets:match_object(obj_table(Name), Pattern),
+    lists:map(fun(#entry{key=Key,val=Val}) ->
+        gen_server:cast(Name, {accessed, Key}),
+        Val
+    end, Entries);
 match_object(LRU, KeySpec, ValueSpec) ->
     gen_server:call(LRU, {match_object, KeySpec, ValueSpec}).
 
