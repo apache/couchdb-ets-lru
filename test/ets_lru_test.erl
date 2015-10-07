@@ -286,7 +286,15 @@ insert_kvs(_, _, 0, _) ->
 insert_kvs(Info, LRU, Count, Limit) ->
     ets_lru:insert(LRU, Count, 1.5234),
     case ets:info(lru_objects, Info) > Limit of
-        true -> erlang:error(exceeded_limit);
+        true ->
+            % Retry again as eviction statistics
+            % returned by ets:info() can be delayed.
+            timer:sleep(1),
+            case ets:info(lru_objects, Info) > Limit of
+                true ->
+                    erlang:error(exceeded_limit);
+                false -> true
+            end;
         false -> true
     end,
     insert_kvs(Info, LRU, Count - 1, Limit).
