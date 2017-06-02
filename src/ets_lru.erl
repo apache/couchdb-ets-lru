@@ -326,11 +326,11 @@ next_timeout(St) ->
 
 set_options(St, []) ->
     St;
-set_options(St, [{max_objects, N} | Rest]) when is_integer(N), N > 0 ->
+set_options(St, [{max_objects, N} | Rest]) when is_integer(N), N >= 0 ->
     set_options(St#st{max_objs=N}, Rest);
-set_options(St, [{max_size, N} | Rest]) when is_integer(N), N > 0 ->
+set_options(St, [{max_size, N} | Rest]) when is_integer(N), N >= 0 ->
     set_options(St#st{max_size=N}, Rest);
-set_options(St, [{max_lifetime, N} | Rest]) when is_integer(N), N > 0 ->
+set_options(St, [{max_lifetime, N} | Rest]) when is_integer(N), N >= 0 ->
     set_options(St#st{max_lifetime=N}, Rest);
 set_options(_, [Opt | _]) ->
     throw({invalid_option, Opt}).
