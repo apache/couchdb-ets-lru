@@ -138,9 +138,9 @@ basic_behavior_test_() ->
         }
     }.
 
-lru_options_test_() ->
+lru_good_options_test_() ->
     {
-        "Test LRU options",
+        "Test good LRU options",
         {foreachx,
             fun(Opts) ->
                 process_flag(trap_exit,true),
@@ -156,7 +156,28 @@ lru_options_test_() ->
                 {[{max_size, 2342923423942309423094}], fun test_good_opts/2},
                 {[{max_lifetime, 1}], fun test_good_opts/2},
                 {[{max_lifetime, 5}], fun test_good_opts/2},
-                {[{max_lifetime, 1244209909180928348}], fun test_good_opts/2},
+                {[{max_lifetime, 1244209909180928348}], fun test_good_opts/2}
+            ]
+        }
+    }.
+
+lru_bad_options_test_() ->
+    {
+        "Test bad LRU options",
+        {foreachx,
+            fun(Opts) ->
+                process_flag(trap_exit,true),
+                ets_lru:start_link(?MODULE, Opts)
+            end,
+            fun(_, Cfg) ->
+                case whereis(?MODULE) of
+                    Pid when is_pid(Pid) ->
+                        stop_lru({ok, Pid});
+                    undefined ->
+                        ok
+                end
+            end,
+            [
                 {[{bingo, bango}], fun test_bad_opts/2},
                 {[12], fun test_bad_opts/2},
                 {[true], fun test_bad_opts/2}
