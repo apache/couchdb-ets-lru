@@ -169,7 +169,7 @@ lru_bad_options_test_() ->
                 process_flag(trap_exit,true),
                 ets_lru:start_link(?MODULE, Opts)
             end,
-            fun(_, Cfg) ->
+            fun(_, _) ->
                 case whereis(?MODULE) of
                     Pid when is_pid(Pid) ->
                         stop_lru({ok, Pid});
