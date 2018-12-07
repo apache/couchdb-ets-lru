@@ -164,7 +164,7 @@ handle_call({match, KeySpec, ValueSpec}, _From, St) ->
     {reply, Values, St, 0};
 
 handle_call({insert, Key, Val}, _From, St) ->
-    NewATime = erlang:now(),
+    NewATime = os:timestamp(),
     Pattern = #entry{key=Key, atime='$1', _='_'},
     case ets:match(St#st.objects, Pattern) of
         [[ATime]] ->
@@ -233,7 +233,7 @@ accessed(Key, St) ->
     Pattern = #entry{key=Key, atime='$1', _='_'},
     case ets:match(St#st.objects, Pattern) of
         [[ATime]] ->
-            NewATime = erlang:now(),
+            NewATime = os:timestamp(),
             Update = {#entry.atime, NewATime},
             true = ets:update_element(St#st.objects, Key, Update),
             true = ets:delete(St#st.atimes, ATime),
