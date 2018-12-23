@@ -44,11 +44,16 @@
 ]).
 
 
+-define(DEFAULT_TIME_UNIT, millisecond).
+
+-type time_value() :: integer().
+-type strict_monotonic_time() :: {time_value(), integer()}.
+
 -record(entry, {
-    key,
-    val,
-    atime,
-    ctime
+    key :: term(),
+    val :: term(),
+    atime :: strict_monotonic_time(),
+    ctime :: time_value()
 }).
 
 -record(st, {
@@ -56,9 +61,10 @@
     atimes,
     ctimes,
 
-    max_objs,
-    max_size,
-    max_lifetime
+    max_objs :: non_neg_integer() | undefined,
+    max_size :: non_neg_integer() | undefined,
+    max_lifetime :: non_neg_integer() | undefined,
+    time_unit = ?DEFAULT_TIME_UNIT :: atom()
 }).
 
 
@@ -164,7 +170,7 @@ handle_call({match, KeySpec, ValueSpec}, _From, St) ->
     {reply, Values, St, 0};
 
 handle_call({insert, Key, Val}, _From, St) ->
-    NewATime = erlang:now(),
+    NewATime = strict_monotonic_time(St#st.time_unit),
     Pattern = #entry{key=Key, atime='$1', _='_'},
     case ets:match(St#st.objects, Pattern) of
         [[ATime]] ->
@@ -173,10 +179,11 @@ handle_call({insert, Key, Val}, _From, St) ->
             true = ets:delete(St#st.atimes, ATime),
             true = ets:insert(St#st.atimes, {NewATime, Key});
         [] ->
-            Entry = #entry{key=Key, val=Val, atime=NewATime, ctime=NewATime},
+            NewCTime = element(1, NewATime),
+            Entry = #entry{key=Key, val=Val, atime=NewATime, ctime=NewCTime},
             true = ets:insert(St#st.objects, Entry),
             true = ets:insert(St#st.atimes, {NewATime, Key}),
-            true = ets:insert(St#st.ctimes, {NewATime, Key})
+            true = ets:insert(St#st.ctimes, {NewCTime, Key})
     end,
     {reply, ok, St, 0};
 
@@ -233,7 +240,7 @@ accessed(Key, St) ->
     Pattern = #entry{key=Key, atime='$1', _='_'},
     case ets:match(St#st.objects, Pattern) of
         [[ATime]] ->
-            NewATime = erlang:now(),
+            NewATime = strict_monotonic_time(St#st.time_unit),
             Update = {#entry.atime, NewATime},
             true = ets:update_element(St#st.objects, Key, Update),
             true = ets:delete(St#st.atimes, ATime),
@@ -275,13 +282,13 @@ trim_size(#st{max_size=Max}=St) ->
 trim_lifetime(#st{max_lifetime=undefined}) ->
     ok;
 trim_lifetime(#st{max_lifetime=Max}=St) ->
-    Now = os:timestamp(),
+    Now = erlang:monotonic_time(St#st.time_unit),
     case ets:first(St#st.ctimes) of
         '$end_of_table' ->
             ok;
         CTime ->
-            DiffInMilli = timer:now_diff(Now, CTime) div 1000,
-            case DiffInMilli > Max of
+            TimeDiff = Now - CTime,
+            case TimeDiff > Max of
                 true ->
                     [{CTime, Key}] = ets:lookup(St#st.ctimes, CTime),
                     Pattern = #entry{key=Key, atime='$1', _='_'},
@@ -318,9 +325,9 @@ next_timeout(St) ->
         '$end_of_table' ->
             infinity;
         CTime ->
-            Now = os:timestamp(),
-            DiffInMilli = timer:now_diff(Now, CTime) div 1000,
-            erlang:max(St#st.max_lifetime - DiffInMilli, 0)
+            Now = erlang:monotonic_time(St#st.time_unit),
+            TimeDiff = Now - CTime,
+            erlang:max(St#st.max_lifetime - TimeDiff, 0)
     end.
 
 
@@ -332,6 +339,8 @@ set_options(St, [{max_size, N} | Rest]) when is_integer(N), N >= 0 ->
     set_options(St#st{max_size=N}, Rest);
 set_options(St, [{max_lifetime, N} | Rest]) when is_integer(N), N >= 0 ->
     set_options(St#st{max_lifetime=N}, Rest);
+set_options(St, [{time_unit, T} | Rest]) when is_atom(T) ->
+    set_options(St#st{time_unit=T}, Rest);
 set_options(_, [Opt | _]) ->
     throw({invalid_option, Opt}).
 
@@ -350,3 +359,8 @@ ct_table(Name) ->
 
 table_name(Name, Ext) ->
     list_to_atom(atom_to_list(Name) ++ Ext).
+
+
+-spec strict_monotonic_time(atom()) -> strict_monotonic_time().
+strict_monotonic_time(TimeUnit) ->
+    {erlang:monotonic_time(TimeUnit), erlang:unique_integer([monotonic])}.
