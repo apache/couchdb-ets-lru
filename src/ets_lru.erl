@@ -164,7 +164,9 @@ handle_call({match, KeySpec, ValueSpec}, _From, St) ->
     {reply, Values, St, 0};
 
 handle_call({insert, Key, Val}, _From, St) ->
-    NewATime = erlang:now(),
+    NewATime = {
+        erlang:monotonic_time(),
+        erlang:unique_integer([monotonic])},
     Pattern = #entry{key=Key, atime='$1', _='_'},
     case ets:match(St#st.objects, Pattern) of
         [[ATime]] ->
@@ -233,7 +235,9 @@ accessed(Key, St) ->
     Pattern = #entry{key=Key, atime='$1', _='_'},
     case ets:match(St#st.objects, Pattern) of
         [[ATime]] ->
-            NewATime = erlang:now(),
+            NewATime = {
+                erlang:monotonic_time(),
+                erlang:unique_integer([monotonic])},
             Update = {#entry.atime, NewATime},
             true = ets:update_element(St#st.objects, Key, Update),
             true = ets:delete(St#st.atimes, ATime),
@@ -275,12 +279,13 @@ trim_size(#st{max_size=Max}=St) ->
 trim_lifetime(#st{max_lifetime=undefined}) ->
     ok;
 trim_lifetime(#st{max_lifetime=Max}=St) ->
-    Now = os:timestamp(),
+    Now = erlang:monotonic_time(),
     case ets:first(St#st.ctimes) of
         '$end_of_table' ->
             ok;
-        CTime ->
-            DiffInMilli = timer:now_diff(Now, CTime) div 1000,
+        {CMTime, _} = CTime ->
+            DiffInMilli = erlang:convert_time_unit(
+                Now - CMTime, native, millisecond),
             case DiffInMilli > Max of
                 true ->
                     [{CTime, Key}] = ets:lookup(St#st.ctimes, CTime),
@@ -317,9 +322,10 @@ next_timeout(St) ->
     case ets:first(St#st.ctimes) of
         '$end_of_table' ->
             infinity;
-        CTime ->
-            Now = os:timestamp(),
-            DiffInMilli = timer:now_diff(Now, CTime) div 1000,
+        {CMTime, _} ->
+            Now = erlang:monotonic_time(),
+            DiffInMilli = erlang:convert_time_unit(
+                Now - CMTime, native, millisecond),
             erlang:max(St#st.max_lifetime - DiffInMilli, 0)
     end.
 
