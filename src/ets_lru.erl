@@ -12,7 +12,7 @@
 
 -module(ets_lru).
 -behaviour(gen_server).
--vsn(1).
+-vsn(2).
 
 
 -export([
@@ -53,7 +53,7 @@
     key :: term(),
     val :: term(),
     atime :: strict_monotonic_time(),
-    ctime :: time_value()
+    ctime :: strict_monotonic_time()
 }).
 
 -record(st, {
@@ -179,11 +179,10 @@ handle_call({insert, Key, Val}, _From, St) ->
             true = ets:delete(St#st.atimes, ATime),
             true = ets:insert(St#st.atimes, {NewATime, Key});
         [] ->
-            NewCTime = element(1, NewATime),
-            Entry = #entry{key=Key, val=Val, atime=NewATime, ctime=NewCTime},
+            Entry = #entry{key=Key, val=Val, atime=NewATime, ctime=NewATime},
             true = ets:insert(St#st.objects, Entry),
             true = ets:insert(St#st.atimes, {NewATime, Key}),
-            true = ets:insert(St#st.ctimes, {NewCTime, Key})
+            true = ets:insert(St#st.ctimes, {NewATime, Key})
     end,
     {reply, ok, St, 0};
 
@@ -286,9 +285,8 @@ trim_lifetime(#st{max_lifetime=Max}=St) ->
     case ets:first(St#st.ctimes) of
         '$end_of_table' ->
             ok;
-        CTime ->
-            TimeDiff = Now - CTime,
-            case TimeDiff > Max of
+        CTime = {Time, _} ->
+            case Now - Time > Max of
                 true ->
                     [{CTime, Key}] = ets:lookup(St#st.ctimes, CTime),
                     Pattern = #entry{key=Key, atime='$1', _='_'},
@@ -324,9 +322,9 @@ next_timeout(St) ->
     case ets:first(St#st.ctimes) of
         '$end_of_table' ->
             infinity;
-        CTime ->
+        {Time, _} ->
             Now = erlang:monotonic_time(St#st.time_unit),
-            TimeDiff = Now - CTime,
+            TimeDiff = Now - Time,
             erlang:max(St#st.max_lifetime - TimeDiff, 0)
     end.
 
