@@ -1,6 +1,5 @@
 -module(ets_lru_test).
 
--compile([export_all]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -326,3 +325,16 @@ stop_lru({ok, LRU}) ->
     receive {'DOWN', Ref, process, LRU, Reason} -> Reason end;
 stop_lru({error, _}) ->
     ok.
+
+valid_parameterized_time_unit_test() ->
+    Opts = [{time_unit, microsecond}],
+    {ok, LRU} = ets_lru:start_link(lru_test, Opts),
+    ?assert(is_process_alive(LRU)),
+    ok = ets_lru:insert(LRU, foo, bar),
+    ?assertEqual({ok, bar}, ets_lru:lookup(LRU, foo)),
+    ?assertEqual(ok, ets_lru:stop(LRU)).
+
+invalid_parameterized_time_unit_test() ->
+    Opts = [{time_unit, invalid}],
+    {ok, LRU} = ets_lru:start_link(lru_test, Opts),
+    ?assertExit(_, ets_lru:insert(LRU, foo, bar)).
